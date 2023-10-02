@@ -1,0 +1,2 @@
+from .pipeline_kandinsky_img2img import KandinskyImg2ImgPipeline
+from .pipeline_kandinsky2_2_img2img import KandinskyV22Img2ImgPipeline

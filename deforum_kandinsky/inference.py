@@ -48,8 +48,8 @@ class DeforumKandinsky:
         root.model = Models(prior, decoder_img2img, root.device)
         return root
 
-    def prepare_configs(self, animations, durations, fps, **kwargs):
-        args_dict, anim_args_dict = Script(animations, durations, **kwargs).args
+    def prepare_configs(self, animations, durations, accelerations, fps, **kwargs):
+        args_dict, anim_args_dict = Script(animations, durations, accelerations, **kwargs).args
         
         if "max_frames" not in kwargs: 
             anim_args_dict["max_frames"] = int(sum(durations) * fps) + 1
@@ -78,7 +78,6 @@ class DeforumKandinsky:
             seconds_elapsed = 0
             prompts_dict = dict() 
             for index, (prompt, duration) in enumerate(zip(prompts, durations)): 
-                # print(f"{seconds_elapsed*fps} = {prompt}")
                 prompts_dict[str(int(seconds_elapsed*fps))] = prompt
                 seconds_elapsed += duration
             return prompts_dict
@@ -100,19 +99,25 @@ class DeforumKandinsky:
         animations, 
         prompt_durations, 
         negative_prompts=None,
+        accelerations=None,
         fps=24,  
         **kwargs
     ):
-        if negative_prompts is None or negative_prompts == "":
+        if negative_prompts is None:
             negative_prompts = ['low quility, bad image, cropped, out of frame']*len(prompts)
-
-        assert isinstance(prompts, list) and isinstance(negative_prompts, list) and isinstance(animations, list) 
-        assert len(prompts) == len(negative_prompts) == len(animations)
-
+        if accelerations is None:
+            accelerations = [1.0] * len(prompts)
+        
+        args = [prompts, animations, prompt_durations, negative_prompts, accelerations]
+        assert all(map(lambda a: isinstance(a, list), args)), "all params should be of type 'list'"
+        assert len(set(map(len, (args)))) == 1, "all params should be the same length"
+        assert all(map(lambda a: a > 0, prompt_durations)), "all durations should be positive float/int values"
+        
         self.args, self.anim_args = self.prepare_configs(
             animations,
             prompt_durations,
-            fps, 
+            accelerations,
+            fps,
             **kwargs
         )
 

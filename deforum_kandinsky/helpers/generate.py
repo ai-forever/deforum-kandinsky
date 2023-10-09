@@ -57,6 +57,7 @@ def generate(args, root, frame=0, return_latent=False, return_sample=False, retu
         init_pil = init_pil.cpu().permute(0, 2, 3, 1).float().numpy()
 
         init_pil = root.model.decoder_img2img.numpy_to_pil(init_pil)[0]
+        
     elif args.use_init and frame == 0:
         if isinstance(args.init_image, Image.Image): 
             init_pil = args.init_image
@@ -64,7 +65,9 @@ def generate(args, root, frame=0, return_latent=False, return_sample=False, retu
             init_pil = Image.open(args.init_image)
             
         init_pil = init_pil.resize((args.W, args.H))
-        
+    
+    args.test_init_pil = init_pil
+    
     if not args.use_init and args.strength > 0 and args.strength_0_no_init:
         #print("\nNo init image, but strength > 0. Strength has been auto set to 0, since use_init is False.")
         #print("If you want to force strength > 0 with no init, please set strength_0_no_init to False.\n")
@@ -167,8 +170,6 @@ def generate(args, root, frame=0, return_latent=False, return_sample=False, retu
 
     # Conditioning gradients not implemented for ddim or PLMS
     assert not( any([cond_fs[1]!=0 for cond_fs in loss_fns_scales]) and (args.sampler in ["ddim","plms"]) ), "Conditioning gradients not implemented for ddim or plms. Please use a different sampler."
-
-    generator = torch.Generator(device="cuda").manual_seed(43)
     results = []
     with torch.no_grad():
         with precision_scope("cuda"):
@@ -177,7 +178,8 @@ def generate(args, root, frame=0, return_latent=False, return_sample=False, retu
                         cond_prompts = list(cond_prompts)
                     if isinstance(uncond_prompts, tuple):
                         uncond_prompts = list(uncond_prompts)
-
+                    
+                    generator = torch.Generator().manual_seed(args.prior_seed)
                     c = root.model.prior(cond_prompts, guidance_scale=1.0, generator=generator).image_embeds
                     uc = root.model.prior(uncond_prompts, guidance_scale=1.0, generator=generator).negative_image_embeds
 

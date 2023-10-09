@@ -32,6 +32,8 @@ except ModuleNotFoundError:
     print(running)
     from numpngw import write_png
 
+logging.getLogger("lightning_fabric.utilities.seed").propagate = False
+
 # This function converts the image to 8bpc (if it isn't already) to display it on browser.
 def convert_image_to_8bpc(image, bit_depth_output): 
     if bit_depth_output == 16:
@@ -115,14 +117,15 @@ def render_image_batch(root, args, cond_prompts, uncond_prompts):
     if args.use_init:
         if args.init_image == "":
             raise FileNotFoundError("No path was given for init_image")
-        if args.init_image.startswith('http://') or args.init_image.startswith('https://'):
-            init_array.append(args.init_image)
-        elif not os.path.isfile(args.init_image):
-            if args.init_image[-1] != "/": # avoids path error by adding / to end if not there
-                args.init_image += "/" 
-            for image in sorted(os.listdir(args.init_image)): # iterates dir and appends images to init_array
-                if image.split(".")[-1] in ("png", "jpg", "jpeg"):
-                    init_array.append(args.init_image + image)
+        if isinstance(args.init_image, str):
+            if args.init_image.startswith('http://') or args.init_image.startswith('https://'):
+                init_array.append(args.init_image)
+            elif not os.path.isfile(args.init_image):
+                if args.init_image[-1] != "/": # avoids path error by adding / to end if not there
+                    args.init_image += "/" 
+                for image in sorted(os.listdir(args.init_image)): # iterates dir and appends images to init_array
+                    if image.split(".")[-1] in ("png", "jpg", "jpeg"):
+                        init_array.append(args.init_image + image)
         else:
             init_array.append(args.init_image)
     else:
@@ -135,16 +138,12 @@ def render_image_batch(root, args, cond_prompts, uncond_prompts):
         args.cond_prompt = cond_prompt
         args.uncond_prompt = uncond_prompt
         args.clip_prompt = cond_prompt
-        print(f"Prompt {iprompt+1} of {len(cond_prompts)}")
-        print(f"cond_prompt: {args.cond_prompt}")
-        print(f"uncond_prompt: {args.uncond_prompt}")
 
         all_images = []
 
         for batch_index in range(args.n_batch):
             if clear_between_batches and batch_index % 32 == 0: 
                 display.clear_output(wait=True)            
-            print(f"Batch {batch_index+1} of {args.n_batch}")
             
             for image in init_array: # iterates the init images
                 args.init_image = image
@@ -158,14 +157,14 @@ def render_image_batch(root, args, cond_prompts, uncond_prompts):
                         else:
                             filename = f"{args.timestring}_{index:05}_{args.seed}.png"
                         save_8_16_or_32bpc_image(image, args.outdir, filename, args.bit_depth_output)
-                    if args.display_samples:
-                        if args.bit_depth_output != 8:
-                            image = convert_image_to_8bpc(image, args.bit_depth_output)
-                        display.display(image)
+                    if args.bit_depth_output != 8:
+                        image = convert_image_to_8bpc(image, args.bit_depth_output) 
                     index += 1
+                        
+                    yield dict(image=image, cond_prompt=cond_prompt, uncond_prompt=uncond_prompt, batch_index=batch_index)
                 args.seed = next_seed(args)
 
-        #print(len(all_images))
+
         if args.make_grid:
             grid = make_grid(all_images, nrow=int(len(all_images)/args.grid_rows))
             grid = rearrange(grid, 'c h w -> h w c').cpu().numpy()
@@ -225,7 +224,7 @@ def render_animation(root, anim_args, args, cond_prompts, uncond_prompts):
     if args.save_samples:
         os.makedirs(args.outdir, exist_ok=True)
         print(f"Saving animation frames to {args.outdir}")
-
+    
     # save settings for the batch
     settings_filename = os.path.join(args.outdir, f"{args.timestring}_settings.txt")
     if args.save_settings:
@@ -293,13 +292,15 @@ def render_animation(root, anim_args, args, cond_prompts, uncond_prompts):
 
     args.n_samples = 1
     frame_idx = start_frame
-
+    args.prior_seed = random.randint(0, int(1e6))
+    
     while frame_idx < anim_args.max_frames:
         current_params = dict(
             frame_idx = frame_idx, 
             cond_prompt = args.cond_prompt,
             uncond_prompt = args.uncond_prompt,
             seed = args.seed,
+            prior_seed = args.prior_seed, 
             angle = keys.angle_series[frame_idx], 
             zoom = keys.zoom_series[frame_idx], 
             translation_x = keys.translation_x_series[frame_idx], 
@@ -422,7 +423,9 @@ def render_animation(root, anim_args, args, cond_prompts, uncond_prompts):
                 if anim_args.save_depth_maps:
                     depth_model.save(os.path.join(args.outdir, f"{args.timestring}_depth_{tween_frame_idx:05}.png"), depth, args.bit_depth_output)
                 
-                yield Image.fromarray(img.astype(np.uint8)), current_params
+                current_params["image"] = Image.fromarray(img.astype(np.uint8))
+                # current_params["depth"] = Image.fromarray((depth.cpu().numpy()*255).astype(np.uint8))
+                yield current_params
                 
             if turbo_next_image is not None:
                 prev_sample = sample_from_cv2(turbo_next_image)
@@ -430,6 +433,9 @@ def render_animation(root, anim_args, args, cond_prompts, uncond_prompts):
         # apply transforms to previous frame
         if prev_sample is not None:
             prev_img, depth = anim_frame_warp(prev_sample, args, anim_args, keys, frame_idx, depth_model, depth=None, device=root.device)
+            args.prev_img = prev_img
+            
+            display.display(prev_img)
 
             # hybrid video motion - warps prev_img to match motion, usually to prepare for compositing
             if frame_idx > 0:
@@ -550,16 +556,16 @@ def render_animation(root, anim_args, args, cond_prompts, uncond_prompts):
                 depth = depth_model.predict(sample_to_cv2(sample), anim_args)
                 depth_model.save(os.path.join(args.outdir, f"{args.timestring}_depth_{frame_idx:05}.png"), depth, args.bit_depth_output)
             
-            yield image, current_params
+            current_params["image"] = image
+            # current_params["depth"] = depth
+            # current_params["prev_image"] = args.test_init_pil                               
+            yield current_params
             frame_idx += 1
         
         # Convert image to 8bpc to display
         if args.bit_depth_output != 8: 
             image = convert_image_to_8bpc(image, args.bit_depth_output) 
-        
-        # if args.verbose and args.display_samples:
-        #     display.clear_output(wait=True)
-        #     display.display(image)
+
         args.seed = next_seed(args)
     
     
@@ -571,7 +577,7 @@ def render_input_video(root, anim_args, args, cond_prompts, uncond_prompts):
     
     # save the video frames from input video
     print(f"Exporting Video Frames (1 every {anim_args.extract_nth_frame}) frames to {video_in_frame_path}...")
-    vid2frames(anim_args.video_init_path, video_in_frame_path, anim_args.extract_nth_frame, anim_args.overwrite_extracted_frames)
+    last_frame_path = vid2frames(anim_args.video_init_path, video_in_frame_path, anim_args.extract_nth_frame, anim_args.overwrite_extracted_frames)
 
     # determine max frames from length of input frames
     anim_args.max_frames = len([f for f in pathlib.Path(video_in_frame_path).glob('*.jpg')])
@@ -589,7 +595,7 @@ def render_input_video(root, anim_args, args, cond_prompts, uncond_prompts):
         args.use_mask = True
         args.overlay_mask = True
 
-    render_animation(root, anim_args, args, cond_prompts, uncond_prompts)
+    return render_animation(root, anim_args, args, cond_prompts, uncond_prompts)
 
 def render_interpolation(root, anim_args, args, cond_prompts, uncond_prompts):
 
@@ -597,15 +603,17 @@ def render_interpolation(root, anim_args, args, cond_prompts, uncond_prompts):
     args.cond_prompts = cond_prompts
 
     # create output folder for the batch
-    os.makedirs(args.outdir, exist_ok=True)
+    if args.save_settings or args.save_samples:
+        os.makedirs(args.outdir, exist_ok=True)
 
     print(f"Saving animation frames to {args.outdir}")
 
     # save settings for the batch
-    settings_filename = os.path.join(args.outdir, f"{args.timestring}_settings.txt")
-    with open(settings_filename, "w+", encoding="utf-8") as f:
-        s = {**dict(args.__dict__), **dict(anim_args.__dict__)}
-        json.dump(s, f, ensure_ascii=False, indent=4)
+    if args.save_settings:
+        settings_filename = os.path.join(args.outdir, f"{args.timestring}_settings.txt")
+        with open(settings_filename, "w+", encoding="utf-8") as f:
+            s = {**dict(args.__dict__), **dict(anim_args.__dict__)}
+            json.dump(s, f, ensure_ascii=False, indent=4)
     
     # Interpolation Settings
     args.n_samples = 1
@@ -629,11 +637,11 @@ def render_interpolation(root, anim_args, args, cond_prompts, uncond_prompts):
             image = convert_image_to_8bpc(image, args.bit_depth_output) 
       
         # display.clear_output(wait=True)
-        display.display(image)
-      
+        # display.display(image)
+        yield dict(image=image)
         args.seed = next_seed(args)
 
-    display.clear_output(wait=True)
+    # display.clear_output(wait=True)
     print(f"Interpolation start...")
 
     frame_idx = 0
@@ -658,17 +666,19 @@ def render_interpolation(root, anim_args, args, cond_prompts, uncond_prompts):
 
                 filename = f"{args.timestring}_{frame_idx:05}.png"
                 # Save image to 8bpc or 16bpc
-                save_8_16_or_32bpc_image(image, args.outdir, filename, args.bit_depth_output)
+                if args.save_samples:
+                    save_8_16_or_32bpc_image(image, args.outdir, filename, args.bit_depth_output)
                 frame_idx += 1
                 
 
                 # Convert image to 8bpc to display
-                if args.bit_depth_output != 8: 
+                if args.bit_depth_output != 8 and args.save_samples:
                     image = convert_image_to_8bpc(image, args.bit_depth_output) 
 
-                display.clear_output(wait=True)
-                display.display(image)
-
+                # display.clear_output(wait=True)
+                # display.display(image)
+                yield dict(image=image)
+                
                 args.seed = next_seed(args)
 
     else:
@@ -684,16 +694,17 @@ def render_interpolation(root, anim_args, args, cond_prompts, uncond_prompts):
                 image = results[0]
 
                 filename = f"{args.timestring}_{frame_idx:05}.png"
-                save_8_16_or_32bpc_image(image, args.outdir, filename, args.bit_depth_output)
+                if args.save_samples:
+                    save_8_16_or_32bpc_image(image, args.outdir, filename, args.bit_depth_output)
                 frame_idx += 1
 
                 # Convert image to 8bpc to display
                 if args.bit_depth_output != 8: 
                     image = convert_image_to_8bpc(image, args.bit_depth_output) 
 
-                display.clear_output(wait=True)
-                display.display(image)
-
+                # display.clear_output(wait=True)
+                # display.display(image)
+                yield dict(image=image)
                 args.seed = next_seed(args)
 
     # generate the last prompt
@@ -701,14 +712,16 @@ def render_interpolation(root, anim_args, args, cond_prompts, uncond_prompts):
     results = generate(args, root)
     image = results[0]
     filename = f"{args.timestring}_{frame_idx:05}.png"
-    save_8_16_or_32bpc_image(image, args.outdir, filename, args.bit_depth_output)
+    if args.save_samples:
+        save_8_16_or_32bpc_image(image, args.outdir, filename, args.bit_depth_output)
 
     # Convert image to 8bpc to display
     if args.bit_depth_output != 8: 
         image = convert_image_to_8bpc(image, args.bit_depth_output) 
 
-    display.clear_output(wait=True)
-    display.display(image)
+    # display.clear_output(wait=True)
+    # display.display(image)
+    yield dict(image=image)
     args.seed = next_seed(args)
 
     #clear init_c

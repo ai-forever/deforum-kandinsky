@@ -7,7 +7,8 @@ class Script:
     def __init__(
             self, 
             animations:List[str], 
-            durations:Union[List[int], int]=5, 
+            durations:List[Union[int, float]], 
+            accelerations:List[Union[int, float]],
             linear_transition=True,
             fps=24,
             **kwargs
@@ -15,74 +16,122 @@ class Script:
         assert isinstance(animations, list)
         self.deforum_args = DeforumArgs()
         self.anim_args = DeforumAnimArgs()
-
-        if isinstance(durations, int): durations = [durations]*len(animations)
         seconds_elapsed = 0
         strength_schedule = ""
-        for index, (animation, duration) in enumerate(zip(animations, durations)): 
+        for index, (animation, duration, acceleration) in enumerate(zip(animations, durations, accelerations)): 
             self.process_animation(
                 animation, 
                 start_frame=int((seconds_elapsed)*fps), 
                 n_frames=int(duration*fps), 
+                acceleration=acceleration,
                 linear_transition=linear_transition
                 )
             
-            min_strength = 0.08
+            min_strength = 0.15
+            
+            # decrease sin period by two times if animation == live
+            strength_longtitude = fps*duration
             if animation == "live":
-                strength_schedule += f"{int(seconds_elapsed*fps)}:({min_strength}), "
-                strength_schedule += f"{int(seconds_elapsed*fps)+1}: ({min_strength}+0.1*abs(sin(3.14159*t/{fps*duration/2}))), "
-                strength_schedule += f"{int((seconds_elapsed+duration-1)*fps)}: ({min_strength}+0.1*abs(sin(3.14159*t/{fps*duration/2}))), "
-            else:
-                strength_schedule += f"{int(seconds_elapsed*fps)}:({min_strength}), "
-                strength_schedule += f"{int(seconds_elapsed*fps)+1}: ({min_strength}+0.1*abs(sin(3.14159*t/{fps*duration}))), "
-                strength_schedule += f"{int((seconds_elapsed+duration-1)*fps)}: ({min_strength}+0.1*abs(sin(3.14159*t/{fps*duration}))), "
+                strength_longtitude /= 2 
+            
+            strength_schedule += f"{int(seconds_elapsed*fps)}:({min_strength}), "
+            strength_schedule += f"{int(seconds_elapsed*fps)+1}: ({min_strength}+0.05*abs(sin(3.14159*t/{strength_longtitude}))), "
+            strength_schedule += f"{int((seconds_elapsed+duration-1)*fps)}:({min_strength}+0.05*abs(sin(3.14159*t/{strength_longtitude}))), "
+            
             seconds_elapsed += duration
         
         self.anim_args["strength_schedule"] = strength_schedule[:-2]
+        # if all([anim in ["flipping_phi", "right", "left", "up", "down", "live"] for anim in animations]): 
+        if len(set(animations))==1 and animations[0]=="flipping_phi":
+            self.anim_args["animation_mode"] = "2D"
         self._update_anim_args(**kwargs)
 
-    def process_animation(self, animation:str, start_frame:int, n_frames:int=48, linear_transition:bool=True): 
-        def _animations_params_dict():
-            right = "translation_x", 1.5
-            left =  "translation_x", -1.5
-            up = "translation_y", 1.5
-            down = "translation_y", -1.5
-            spin_clockwise = "rotation_3d_z", 1.5
-            spin_counterclockwise =  "rotation_3d_z", -1.5
-            zoomin = "translation_z", 1.5
-            zoomout = "translation_z", -1.5
-            live = "translation_z", "sin(3.14159*t/90)*0.05"
-            return locals()
-        assert isinstance(start_frame, int) and isinstance(n_frames, int)
-        
-        # parse string to dictionary
-        animations_params = _animations_params_dict()
-        assert animation in animations_params, f"animation should be one of {list(animations_params.keys())}"
-        
+    def _animation_params_dict(self, acceleration=1): 
+        assert acceleration > 0
+        params_dict = {
+            "right": dict(
+                translation_x = acceleration,
+            ),
+            "left": dict(
+                translation_x = -acceleration
+            ),
+            "up": dict(
+                translation_y = acceleration
+            ),
+            "down": dict(
+                translation_y = - acceleration
+            ),
+            "spin_clockwise": dict(
+                rotation_3d_z = acceleration
+            ),
+            "spin_counterclockwise": dict(
+                rotation_3d_z = -acceleration
+            ),
+            "zoomin": dict(
+                translation_z = acceleration
+            ),
+            "zoomout": dict(
+                translation_z = -acceleration
+            ),
+            "rotate_right": dict(
+                rotation_3d_y = acceleration
+            ),
+            "rotate_left": dict(
+                rotation_3d_y = -acceleration
+            ),
+            "rotate_up": dict(
+                rotation_3d_x = acceleration
+            ),
+            "rotate_down": dict(
+                rotation_3d_x = -acceleration
+            ),
+            "around_right": dict(
+                translation_x = 2.5 * acceleration, 
+                rotation_3d_y =-0.5 * acceleration,
+            ),
+            "around_left": dict(
+                translation_x = -2.5 * acceleration, 
+                rotation_3d_y = 0.5 * acceleration,
+            ),
+            "flipping_phi": dict( 
+                perspective_flip_phi = 5.0 * acceleration,
+            ),
+            "live": dict(
+                translation_x = "sin(3.14159*t/90)*0.05",
+            ),
+        }
+        return params_dict
+
+    def process_animation(self, animation:str, start_frame:int, n_frames:int=48, acceleration=1.0, linear_transition:bool=True): 
+        assert isinstance(start_frame, int) and isinstance(n_frames, int)        
+
         if "spin" in animation:
             linear_transition = False
-            
-        animations_param, value = animations_params[animation]
-        current_param = dict([item.split(":") for item in self.anim_args[animations_param].split(",")])
-        current_param = {int(k):v for k,v in current_param.items()}
         
+        # parse string to dictionary
+        animations_params = self._animation_params_dict(acceleration)
+        assert animation in animations_params, f"animation should be one of {list(animations_params.keys())}"
         
-        if linear_transition:
-            current_param[start_frame] = value
-            current_param[start_frame+n_frames] = 0.0
-        else: 
-            current_param[start_frame] = 0.0
-            current_param[start_frame+1] = value
-            current_param[start_frame+n_frames-1] = value
-            current_param[start_frame+n_frames] = 0.0
+        for animations_param, value in animations_params[animation].items():
+            current_param = dict([item.split(":") for item in self.anim_args[animations_param].split(",")])
+            current_param = {int(k):v for k,v in current_param.items()}
+
+            if linear_transition:
+                current_param[start_frame] = value
+                current_param[start_frame+n_frames] = 0.0
+            else: 
+                current_param[start_frame] = 0.0
+                current_param[start_frame+1] = value
+                current_param[start_frame+n_frames-1] = value
+                current_param[start_frame+n_frames] = 0.0
+
+            # convert dict back to string
+            output_string = ""
+            for key, value in sorted(current_param.items(), key=lambda a: a[0]): 
+                value = f"({str(value).strip()})".replace("((", "(").replace("))", ")").strip()
+                output_string += f" {key}: {value},"
         
-        # convert dict back to string
-        output_string = ""
-        for key, value in sorted(current_param.items(), key=lambda a: a[0]): 
-            value = f"({str(value).strip()})".replace("((", "(").replace("))", ")").strip()
-            output_string += f" {key}: {value},"
-        
-        self.anim_args[animations_param] = output_string[1:-1]
+            self.anim_args[animations_param] = output_string[1:-1]
 
 
     def _update_anim_args(self, **kwargs):

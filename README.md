@@ -23,11 +23,13 @@ import torch
 ### convert list frames to mp4 video
 ```python
 #  create video from generated frames
-def frames2video(frames, output_path="video.mp4"):
-    writer = iio.get_writer(output_path, fps=24)
+def frames2video(frames, output_path="video.mp4", fps=24, display=False):
+    writer = iio.get_writer(output_path, fps=fps)
     for frame in tqdm(frames):
         writer.append_data(np.array(frame))
     writer.close()
+    if display:
+        Video(url=output_path)
 ```
 
 ### Kandinsky 2.2
@@ -96,31 +98,35 @@ deforum = DeforumKandinsky(
 )
 ```
 
-#### One-liner
-```python
-frames = deforum("Van Gogh's Starry Night", "live")
-```
-#### Or
-```python
-frames = deforum(
+```python   
+animation = deforum(
     prompts=[
-        "Van Gogh's Starry Night", 
-        'Space, stars, galaxies', 
-        'Milky Way'
+        "winter forest, snowflakes, Van Gogh style",
+        "spring forest, flowers, sun rays, Van Gogh style",
+        "summer forest, lake, reflections on the water, summer sun, Van Gogh style",
+        "autumn forest, rain, Van Gogh style",
+        "winter forest, snowflakes, Van Gogh style",
     ], 
-    animations=[
-        'live', 
-        'up', 
-        'spin_clockwise'
-    ], 
-    prompt_durations=[4, 3, 2],
-    negative_prompts=[
-        'low quility', 
-        'bad image, cropped', 
-        'cropped'
-    ],
-    verbose=True,
+    animations=['live', 'right', 'right', 'right', 'live'], 
+    prompt_durations=[1, 1, 1, 1, 1],
     H=640,
     W=640,
+    fps=24,
+    save_samples=False,
+    linear_transition=True,
 )
+
+frames = []
+
+out = widgets.Output()
+pbar = tqdm(animation, total=len(deforum))
+display.display(out)
+for frame, current_params in pbar:
+    frames.append(frame)
+    with out:
+        image = item.pop('image', None)
+        frames.append(image)
+        display.clear_output(wait=True) 
+        for key, value in current_params.items():
+            print(f"{key}: {value}")
 ```

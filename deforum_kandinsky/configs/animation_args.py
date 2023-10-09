@@ -14,11 +14,11 @@ def DeforumAnimArgs():
     rotation_3d_x = "0:(0)"#@param {type:"string"}
     rotation_3d_y = "0:(0)"#@param {type:"string"}
     rotation_3d_z = "0:(0)"#@param {type:"string"}
-    flip_2d_perspective = False #@param {type:"boolean"}
+    flip_2d_perspective = True #@param {type:"boolean"}
     perspective_flip_theta = "0:(0)"#@param {type:"string"}
     perspective_flip_phi = "0:(0)"#@param {type:"string"}
     perspective_flip_gamma = "0:(0)"#@param {type:"string"}
-    perspective_flip_fv = "0:(53)"#@param {type:"string"}
+    perspective_flip_fv = "0:(56)"#@param {type:"string"}
     noise_schedule = "0: (0.02)"#@param {type:"string"}
     strength_schedule = "0: (0.2)"#@param {type:"string"}
     contrast_schedule = "0: (1.0)"#@param {type:"string"}
@@ -55,7 +55,7 @@ def DeforumAnimArgs():
     save_depth_maps = False #@param {type:"boolean"}
 
     #@markdown ####**Video Input:**
-    video_init_path ='flip.gif'#@param {type:"string"}
+    video_init_path =None#@param {type:"string"}
     extract_nth_frame = 1#@param {type:"number"}
     overwrite_extracted_frames = True #@param {type:"boolean"}
     use_mask_video = False #@param {type:"boolean"}

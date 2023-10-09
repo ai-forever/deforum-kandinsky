@@ -1,6 +1,4 @@
 # Deforum Kandinsky
-
-## Getting started...
 ### install dependencies
 ```bash
 git clone https://gitlab.aicloud.sbercloud.ru/sberai-rnd/deforum-kandinsky.git

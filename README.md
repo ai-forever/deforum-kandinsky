@@ -11,13 +11,18 @@ pip install -r requirements.txt
 ### Import dependencies
 ```python
 from IPython.display import Video
+from deforum_kandinsky import KandinskyV22Img2ImgPipeline, DeforumKandinsky
+from diffusers import KandinskyV22PriorPipeline
 from transformers import CLIPVisionModelWithProjection
 from diffusers.models import UNet2DConditionModel
 import imageio.v2 as iio
-from tqdm.autonotebook import tqdm
 from PIL import Image
 import numpy as np
 import torch
+import datetime
+from tqdm.notebook import tqdm
+import ipywidgets as widgets
+from IPython import display
 ```
 
 ### convert list frames to mp4 video
@@ -29,7 +34,7 @@ def frames2video(frames, output_path="video.mp4", fps=24, display=False):
         writer.append_data(np.array(frame))
     writer.close()
     if display:
-        Video(url=output_path)
+        display.Video(url=output_path)
 ```
 
 ### Kandinsky 2.2
@@ -87,8 +92,7 @@ decoder = KandinskyImg2ImgPipeline.from_pretrained(
     torch_dtype=torch.float16
     ).to(device)
 ```
-### Easily create animation using default modes
-
+### Easily create animation constructor
 #### define instance of Deforum
 ```python
 deforum = DeforumKandinsky(
@@ -113,7 +117,6 @@ animation = deforum(
     W=640,
     fps=24,
     save_samples=False,
-    linear_transition=True,
 )
 
 frames = []
@@ -129,4 +132,9 @@ for frame, current_params in pbar:
         display.clear_output(wait=True) 
         for key, value in current_params.items():
             print(f"{key}: {value}")
+
+# save and display video
+display.clear_output(wait=True) 
+frames2video(frames, "output_2_2.mp4", fps=24)
+display.Video(url="output_2_2.mp4")
 ```

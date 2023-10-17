@@ -151,6 +151,7 @@ animation = deforum(
     ], 
     animations=['live', 'right', 'right', 'right', 'live'], 
     prompt_durations=[1, 1, 1, 1, 1],
+    accelerations=[1, 1, 1, 1, 1],
     H=640,
     W=640,
     fps=24,

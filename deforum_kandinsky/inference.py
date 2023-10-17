@@ -19,6 +19,7 @@ from .helpers.prompts import Prompts
 from .helpers.render import render_animation, render_input_video, render_image_batch, render_interpolation
 from .helpers.aesthetics import load_aesthetics_model
 from .helpers.script import Script
+from .helpers.depth import DepthModel
 
 def get_gpu_info():
     sub_p_res = subprocess.run(['nvidia-smi', '--query-gpu=name,memory.total,memory.free', '--format=csv,noheader'], stdout=subprocess.PIPE).stdout.decode('utf-8')
@@ -46,6 +47,9 @@ class DeforumKandinsky:
         root.map_location = device
         root.device = torch.device(root.map_location)
         root.model = Models(prior, decoder_img2img, root.device)
+        root.depth_model = DepthModel(root.device)
+        root.depth_model.load_midas(root.models_path)
+        root.depth_model.load_adabins(root.models_path)
         return root
 
     def prepare_configs(self, animations, durations, accelerations, fps, **kwargs):

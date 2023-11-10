@@ -146,7 +146,7 @@ animation = deforum(
         "spring forest, flowers, sun rays, Van Gogh style",
         "summer forest, lake, reflections on the water, summer sun, Van Gogh style",
         "autumn forest, rain, Van Gogh style",
-        "winter forest, snowflakes, Van Gogh style",
+        Image.open("path/to/image.jpg"),
     ], 
     animations=['live', 'right', 'right', 'right', 'live'], 
     prompt_durations=[1, 1, 1, 1, 1],

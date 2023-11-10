@@ -1,6 +1,4 @@
 import subprocess, time, gc, os, sys, time
-sub_p_res = subprocess.run(['nvidia-smi', '--query-gpu=name,memory.total,memory.free', '--format=csv,noheader'], stdout=subprocess.PIPE).stdout.decode('utf-8')
-
 import subprocess
 import time
 import gc
@@ -47,9 +45,9 @@ class DeforumKandinsky:
         root.map_location = device
         root.device = torch.device(root.map_location)
         root.model = Models(prior, decoder_img2img, root.device)
-        root.depth_model = DepthModel(root.device)
-        root.depth_model.load_midas(root.models_path)
-        root.depth_model.load_adabins(root.models_path)
+        root.depth_model = DepthModel("cuda")
+        root.depth_model.load_midas("./models")
+        root.depth_model.load_adabins("./models")
         return root
 
     def prepare_configs(self, animations, durations, accelerations, fps, **kwargs):
@@ -97,7 +95,7 @@ class DeforumKandinsky:
     def __len__(self):
         return 0 if self.anim_args.max_frames is None else self.anim_args.max_frames - 1
     
-    def __call__(
+    def render_animation(
         self, 
         prompts, 
         animations, 

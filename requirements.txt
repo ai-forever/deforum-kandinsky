@@ -36,5 +36,4 @@ open-clip-torch
 torchsde
 ninja
 pydantic
-xformers
 imageio[ffmpeg]

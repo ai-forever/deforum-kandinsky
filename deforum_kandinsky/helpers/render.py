@@ -639,6 +639,8 @@ def render_interpolation(root, anim_args, args, cond_prompts, uncond_prompts):
     if anim_args.interpolate_key_frames:
         for i in range(len(prompts_c_s)-1):
             dist_frames = list(cond_prompts.items())[i+1][0] - list(cond_prompts.items())[i][0]
+            print("dist_frames", dist_frames)
+            
             if dist_frames <= 0:
                 print("key frames duplicated or reversed. interpolation skipped.")
                 return
@@ -648,6 +650,7 @@ def render_interpolation(root, anim_args, args, cond_prompts, uncond_prompts):
                 prompt1_c = prompts_c_s[i]
                 prompt2_c = prompts_c_s[i+1]
                 t = j * 1.0 / dist_frames
+                print("1", prompt1_c, prompt2_c)
                 args.init_c = interpolate(t, prompt1_c, prompt2_c, mode="slerp")
 
                 # sample the diffusion model
@@ -677,6 +680,7 @@ def render_interpolation(root, anim_args, args, cond_prompts, uncond_prompts):
                 # interpolate the text embedding
                 prompt1_c = prompts_c_s[i]
                 prompt2_c = prompts_c_s[i+1]  
+                print("2", prompt1_c, prompt2_c)
                 args.init_c = prompt1_c.add(prompt2_c.sub(prompt1_c).mul(j * 1/(anim_args.interpolate_x_frames+1)))
 
                 # sample the diffusion model

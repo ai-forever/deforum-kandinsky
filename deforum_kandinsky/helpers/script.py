@@ -17,6 +17,7 @@ class Script:
         self.deforum_args = DeforumArgs()
         self.anim_args = DeforumAnimArgs()
         seconds_elapsed = 0
+        strength_schedule = ""
         for index, (animation, duration, acceleration) in enumerate(zip(animations, durations, accelerations)): 
             self.process_animation(
                 animation, 
@@ -26,12 +27,35 @@ class Script:
                 linear_transition=linear_transition
                 )
             
+            # min_strength = 0.15
+            
+            # decrease sin period by two times if animation == live
+            # strength_longtitude = fps*duration
+            # if animation == "live":
+                # strength_longtitude /= 2 
+#             
+            # strength_schedule += f"{int(seconds_elapsed*fps)}:({min_strength}), "
+            # strength_schedule += f"{int(seconds_elapsed*fps)+1}: ({min_strength}+0.05*abs(sin(3.14159*t/{strength_longtitude}))), "
+            # strength_schedule += f"{int((seconds_elapsed+duration-1)*fps)}:({min_strength}+0.05*abs(sin(3.14159*t/{strength_longtitude}))), "
+            
+            # min_strength = 0.1
+            
+            # strength_schedule += f"{int(seconds_elapsed*fps)}:({min_strength}), "
+            # strength_schedule += f"{int(seconds_elapsed*fps)+1}: ({max_strength}), "
+            # strength_schedule += f"{int((seconds_elapsed+duration-1)*fps)}: ({max_strength}), "
+            
             seconds_elapsed += duration
-    
+        
+        # self.anim_args["strength_schedule"] = strength_schedule[:-2]
+        # if all([anim in ["flipping_phi", "right", "left", "up", "down", "live"] for anim in animations]): 
         if len(set(animations))==1 and animations[0]=="flipping_phi":
             self.anim_args["animation_mode"] = "2D"
         self._update_anim_args(**kwargs)
-
+    
+    @property 
+    def animations(self):
+        return list(self._animation_params_dict.keys())
+    
     def _animation_params_dict(self, acceleration=1): 
         assert acceleration > 0
         params_dict = {

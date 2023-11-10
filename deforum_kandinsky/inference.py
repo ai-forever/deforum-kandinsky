@@ -95,7 +95,7 @@ class DeforumKandinsky:
     def __len__(self):
         return 0 if self.anim_args.max_frames is None else self.anim_args.max_frames - 1
     
-    def render_animation(
+    def __call__(
         self, 
         prompts, 
         animations, 

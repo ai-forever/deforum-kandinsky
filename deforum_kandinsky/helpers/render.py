@@ -33,7 +33,7 @@ except ModuleNotFoundError:
     from numpngw import write_png
 
 logging.getLogger("lightning_fabric.utilities.seed").propagate = False
-
+            
 # This function converts the image to 8bpc (if it isn't already) to display it on browser.
 def convert_image_to_8bpc(image, bit_depth_output): 
     if bit_depth_output == 16:
@@ -189,7 +189,6 @@ def unsharp_mask(img, kernel_size=(5, 5), sigma=1.0, amount=1.0, threshold=0):
 
 
 def render_animation(root, anim_args, args, cond_prompts, uncond_prompts):
-    
     # create writer to save video
     # frames = []
     
@@ -256,15 +255,11 @@ def render_animation(root, anim_args, args, cond_prompts, uncond_prompts):
     predict_depths = (anim_args.animation_mode == '3D' and anim_args.use_depth_warping) or anim_args.save_depth_maps
     predict_depths = predict_depths or (anim_args.hybrid_composite and anim_args.hybrid_comp_mask_type in ['Depth','Video Depth'])
     if predict_depths:
-        depth_model = DepthModel(root.device)
-        depth_model.load_midas(root.models_path)
-        if anim_args.midas_weight < 1.0:
-            depth_model.load_adabins(root.models_path)
         # depth based compositing requires saved depth maps
         if anim_args.hybrid_composite and anim_args.hybrid_comp_mask_type =='Depth':
             anim_args.save_depth_maps = True
     else:
-        depth_model = None
+        root.depth_model = None
         anim_args.save_depth_maps = False
 
     # state for interpolating between diffusion steps
@@ -345,14 +340,14 @@ def render_animation(root, anim_args, args, cond_prompts, uncond_prompts):
                 advance_prev = turbo_prev_image is not None and tween_frame_idx > turbo_prev_frame_idx
                 advance_next = tween_frame_idx > turbo_next_frame_idx
 
-                if depth_model is not None:
+                if root.depth_model is not None:
                     assert(turbo_next_image is not None)
-                    depth = depth_model.predict(turbo_next_image, anim_args)
+                    depth = root.depth_model.predict(turbo_next_image, anim_args)
 
                 if advance_prev:
-                    turbo_prev_image, _ = anim_frame_warp(turbo_prev_image, args, anim_args, keys, tween_frame_idx, depth_model, depth=depth, device=root.device)
+                    turbo_prev_image, _ = anim_frame_warp(turbo_prev_image, args, anim_args, keys, tween_frame_idx, root.depth_model, depth=depth, device=root.device)
                 if advance_next:
-                    turbo_next_image, _ = anim_frame_warp(turbo_next_image, args, anim_args, keys, tween_frame_idx, depth_model, depth=depth, device=root.device)
+                    turbo_next_image, _ = anim_frame_warp(turbo_next_image, args, anim_args, keys, tween_frame_idx, root.depth_model, depth=depth, device=root.device)
 
                 # hybrid video motion - warps turbo_prev_image or turbo_next_image to match motion
                 if tween_frame_idx > 0:
@@ -388,7 +383,7 @@ def render_animation(root, anim_args, args, cond_prompts, uncond_prompts):
                 # Transformed raw image before color coherence and noise. Used for mask overlay
                 if args.use_mask and args.overlay_mask:
                     # Apply transforms to the original image
-                    init_image_raw, _ = anim_frame_warp(args.init_sample_raw, args, anim_args, keys, frame_idx, depth_model, depth, device=root.device)
+                    init_image_raw, _ = anim_frame_warp(args.init_sample_raw, args, anim_args, keys, frame_idx, root.depth_model, depth, device=root.device)
                     args.init_sample_raw = sample_from_cv2(init_image_raw).half().to(root.device)
 
                 #Transform the mask image
@@ -396,7 +391,7 @@ def render_animation(root, anim_args, args, cond_prompts, uncond_prompts):
                     if args.mask_sample is None:
                         args.mask_sample = prepare_overlay_mask(args, root, prev_sample.shape)
                     # Transform the mask
-                    mask_image, _ = anim_frame_warp(args.mask_sample, args, anim_args, keys, frame_idx, depth_model, depth, device=root.device)
+                    mask_image, _ = anim_frame_warp(args.mask_sample, args, anim_args, keys, frame_idx, root.depth_model, depth, device=root.device)
                     args.mask_sample = sample_from_cv2(mask_image).half().to(root.device)
 
                 turbo_prev_frame_idx = turbo_next_frame_idx = tween_frame_idx
@@ -421,7 +416,7 @@ def render_animation(root, anim_args, args, cond_prompts, uncond_prompts):
                     cv2.imwrite(os.path.join(args.outdir, filename), output_img)
                 
                 if anim_args.save_depth_maps:
-                    depth_model.save(os.path.join(args.outdir, f"{args.timestring}_depth_{tween_frame_idx:05}.png"), depth, args.bit_depth_output)
+                    root.depth_model.save(os.path.join(args.outdir, f"{args.timestring}_depth_{tween_frame_idx:05}.png"), depth, args.bit_depth_output)
                 
                 current_params["image"] = Image.fromarray(img.astype(np.uint8))
                 current_params["depth"] = depth
@@ -432,7 +427,7 @@ def render_animation(root, anim_args, args, cond_prompts, uncond_prompts):
 
         # apply transforms to previous frame
         if prev_sample is not None:
-            prev_img, depth = anim_frame_warp(prev_sample, args, anim_args, keys, frame_idx, depth_model, depth=None, device=root.device)
+            prev_img, depth = anim_frame_warp(prev_sample, args, anim_args, keys, frame_idx, root.depth_model, depth=None, device=root.device)
             # hybrid video motion - warps prev_img to match motion, usually to prepare for compositing
             if frame_idx > 0:
                 if anim_args.hybrid_motion in ['Affine', 'Perspective']:
@@ -454,12 +449,12 @@ def render_animation(root, anim_args, args, cond_prompts, uncond_prompts):
 
             # do hybrid video - composites video frame into prev_img (now warped if using motion)
             if anim_args.hybrid_composite:
-                args, prev_img = hybrid_composite(args, anim_args, frame_idx, prev_img, depth_model, hybrid_comp_schedules, root)
+                args, prev_img = hybrid_composite(args, anim_args, frame_idx, prev_img, root.depth_model, hybrid_comp_schedules, root)
 
             # Transformed raw image before color coherence and noise. Used for mask overlay
             if args.use_mask and args.overlay_mask:
                 # Apply transforms to the original image
-                init_image_raw, _ = anim_frame_warp(args.init_sample_raw, args, anim_args, keys, frame_idx, depth_model, depth, device=root.device)
+                init_image_raw, _ = anim_frame_warp(args.init_sample_raw, args, anim_args, keys, frame_idx, root.depth_model, depth, device=root.device)
                 args.init_sample_raw = sample_from_cv2(init_image_raw).half().to(root.device)
 
             #Transform the mask image
@@ -467,7 +462,7 @@ def render_animation(root, anim_args, args, cond_prompts, uncond_prompts):
                 if args.mask_sample is None:
                     args.mask_sample = prepare_overlay_mask(args, root, prev_sample.shape)
                 # Transform the mask
-                mask_sample, _ = anim_frame_warp(args.mask_sample, args, anim_args, keys, frame_idx, depth_model, depth, device=root.device)
+                mask_sample, _ = anim_frame_warp(args.mask_sample, args, anim_args, keys, frame_idx, root.depth_model, depth, device=root.device)
                 args.mask_sample = sample_from_cv2(mask_sample).half().to(root.device)
             
             # apply color matching
@@ -549,8 +544,8 @@ def render_animation(root, anim_args, args, cond_prompts, uncond_prompts):
             if args.save_samples:
                 save_8_16_or_32bpc_image(image, args.outdir, filename, args.bit_depth_output)
             if anim_args.save_depth_maps:
-                depth = depth_model.predict(sample_to_cv2(sample), anim_args)
-                depth_model.save(os.path.join(args.outdir, f"{args.timestring}_depth_{frame_idx:05}.png"), depth, args.bit_depth_output)
+                depth = root.depth_model.predict(sample_to_cv2(sample), anim_args)
+                root.depth_model.save(os.path.join(args.outdir, f"{args.timestring}_depth_{frame_idx:05}.png"), depth, args.bit_depth_output)
             
             current_params["image"] = image
             current_params["depth"] = depth                           
@@ -644,6 +639,8 @@ def render_interpolation(root, anim_args, args, cond_prompts, uncond_prompts):
     if anim_args.interpolate_key_frames:
         for i in range(len(prompts_c_s)-1):
             dist_frames = list(cond_prompts.items())[i+1][0] - list(cond_prompts.items())[i][0]
+            print("dist_frames", dist_frames)
+            
             if dist_frames <= 0:
                 print("key frames duplicated or reversed. interpolation skipped.")
                 return
@@ -653,6 +650,7 @@ def render_interpolation(root, anim_args, args, cond_prompts, uncond_prompts):
                 prompt1_c = prompts_c_s[i]
                 prompt2_c = prompts_c_s[i+1]
                 t = j * 1.0 / dist_frames
+                print("1", prompt1_c, prompt2_c)
                 args.init_c = interpolate(t, prompt1_c, prompt2_c, mode="slerp")
 
                 # sample the diffusion model
@@ -682,6 +680,7 @@ def render_interpolation(root, anim_args, args, cond_prompts, uncond_prompts):
                 # interpolate the text embedding
                 prompt1_c = prompts_c_s[i]
                 prompt2_c = prompts_c_s[i+1]  
+                print("2", prompt1_c, prompt2_c)
                 args.init_c = prompt1_c.add(prompt2_c.sub(prompt1_c).mul(j * 1/(anim_args.interpolate_x_frames+1)))
 
                 # sample the diffusion model

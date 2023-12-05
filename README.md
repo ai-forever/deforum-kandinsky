@@ -5,27 +5,26 @@
     </a>
 </p> 
 
-## Examples
-
-
-<img src="https://github.com/ai-forever/deforum-kandinsky/assets/69383296/1f40a5a1-c02b-4aac-a937-eee0aa721062" height="800" width="800"/>
-
 ## Introduction
 <p>
 In the past few years, there has been a marked increase in the popularity of generative models that utilize various data modalities. One of the most challenging undertakings in this regard is synthesizing videos from text, which is both time-consuming and resource-intensive. The core of proposed solution/animation approach is Kandinsky extension with Deforum features. This leads to new generative opportunities of text2image model.
 </p>
 
-## Description
-
-<img src="https://github.com/ai-forever/deforum-kandinsky/assets/69383296/2869904e-f980-4553-8660-7baa0ab47a12" height="800" width="800"/>
-
+## Examples
 <p>
-The idea of animating a picture is quite simple: from the original 2D image we obtain a pseudo-3D scene and then simulate a camera flyover of this scene. The pseudo-3D effect occurs due to the human eye’s perception of motion dynamics through spatial transformations. Using various motion animation mechanics, we get a sequence of frames that look like they were shot with a first-person camera. The process of creating such a set of personnel is divided into 2 stages:
-<ol>
-  <li>creating a pseudo-3D scene and simulating a camera flyby (obtaining successive frames);</li>
-  <li>application of the image-to-image approach for additional correction of the resulting images.</li>
-</ol>
-
+    <img src="https://github.com/ai-forever/deforum-kandinsky/assets/69383296/afe7885c-fb3c-479d-9f1a-8427f2636555"/>
+    <img src="https://github.com/ai-forever/deforum-kandinsky/assets/69383296/6f2b74f3-d290-4b26-b7c9-ccfe239e54e6"/>
+<p>
+     <img src="https://github.com/ai-forever/deforum-kandinsky/assets/69383296/4cc93196-5146-4889-9b9d-0b87079c643f"/>
+     <img src="https://github.com/ai-forever/deforum-kandinsky/assets/69383296/03a0d489-7138-42fe-9089-48c63bed9911"/>
+</p>
+<p>
+    <img src="https://github.com/ai-forever/deforum-kandinsky/assets/69383296/f7588587-d307-4eb6-a610-b5618c5c0be5">
+    <img src="https://github.com/ai-forever/deforum-kandinsky/assets/69383296/1d58d9f6-da3b-4cca-9240-ff196478f1dd>">
+</p>                                  
+<p>
+    <img src="https://github.com/ai-forever/deforum-kandinsky/assets/69383296/58f8e66d-1d42-40b5-bbd1-9f593237c6aa"/>
+    <img src="https://github.com/ai-forever/deforum-kandinsky/assets/69383296/725b5165-e6cf-4aaf-a51f-afc382c2a5f9"/>
 </p>
 
 ## Getting Started
@@ -147,7 +146,7 @@ animation = deforum(
         "spring forest, flowers, sun rays, Van Gogh style",
         "summer forest, lake, reflections on the water, summer sun, Van Gogh style",
         "autumn forest, rain, Van Gogh style",
-        "winter forest, snowflakes, Van Gogh style",
+        Image.open("path/to/image.jpg"),
     ], 
     animations=['live', 'right', 'right', 'right', 'live'], 
     prompt_durations=[1, 1, 1, 1, 1],
@@ -162,18 +161,16 @@ frames = []
 out = widgets.Output()
 pbar = tqdm(animation, total=len(deforum))
 display.display(out)
-
 with out:
-    for index, item in enumerate(pbar):
-        frame = item["image"]
+    for item in pbar:
+        frame = item.pop('image', None)
         frames.append(frame)
         display.clear_output(wait=True) 
         display.display(frame)
         for key, value in item.items():
-            if not isinstance(value, (np.ndarray, torch.Tensor, Image.Image)):
-                print(f"{key}: {value}")
-            
+            print(f"{key}: {value}")
 
+# save and display video
 display.clear_output(wait=True) 
 frames2video(frames, "output_2_2.mp4", fps=24)
 display.Video(url="output_2_2.mp4")

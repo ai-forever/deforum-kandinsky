@@ -1,16 +1,15 @@
 from pydantic import BaseModel
-from typing import Union, List, Dict
+from typing import Union, List, Dict, Optional, Type
+from PIL import Image
 
-class Prompts(BaseModel):
-    """
-    The Prompt class takes in two parameters, a positive prompt and an optional negative prompt.
-    The parameters can be of type str, list of str, or dict with integer keys.
-    This class provides methods to convert the inputs into str, list, or dict.
-    """
-    
-    # These can be either str, List[str], or Dict[int, str]
-    prompt: Union[str, List[str], Dict[int, str]]
-    neg_prompt: Union[str, List[str], Dict[int, str]] = ""  # Optional and default to empty string
+class Prompts:
+    def __init__(self, 
+                 prompt: Union[str, List[str], Dict[int, Union[str, Image.Image]]], 
+                 neg_prompt: Union[str, List[str], Dict[int, Union[str, Image.Image]]] = ""
+                ):
+        self.prompt = prompt
+        self.neg_prompt = neg_prompt
+
 
     def as_string(self):
         """ Convert the prompt and neg_prompt into a string. """

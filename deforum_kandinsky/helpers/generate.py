@@ -184,10 +184,17 @@ def generate(args, root, frame=0, return_latent=False, return_sample=False, retu
                         c = args.init_c
                     else:
                         # if isinstance(cond_prompts, Image.Image):
-                        c = root.model.prior.interpolate(cond_prompts, weights=[1], generator=generator).image_embeds
+                        c = root.model.prior(
+                            cond_prompts, 
+                            generator=generator
+                        ).image_embeds
                         # else:
                             # c = root.model.prior(cond_prompts, guidance_scale=1.0, generator=generator).image_embeds
-                    uc = root.model.prior(uncond_prompts, guidance_scale=1.0, generator=generator).negative_image_embeds
+                    uc = root.model.prior(
+                        uncond_prompts, 
+                        guidance_scale=1.0, 
+                        generator=generator
+                    ).negative_image_embeds
 
                     model_kwargs = dict(
                          image_embeds=c,
